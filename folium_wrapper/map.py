@@ -11,6 +11,43 @@ class Map:
             location = [0, 0]
         self.map = folium.Map(location=location, zoom_start=zoom_start, tiles=tiles, **kwargs)
     
+    def _extract_coordinates(self, df: Union[pd.DataFrame, gpd.GeoDataFrame], lat_col: Optional[str], lon_col: Optional[str]):
+        """
+        Private method to extract coordinates from a GeoDataFrame or DataFrame.
+        """
+        is_geodf = isinstance(df, gpd.GeoDataFrame)
+
+        # If GeoDataFrame and lat_col/lon_col not provided, extract coordinates from geometry
+        if is_geodf and lat_col is None and lon_col is None:
+            if df.geometry.is_empty.any():
+                raise ValueError("GeoDataFrame contains empty geometries.")
+            if not all(df.geometry.geom_type == 'Point'):
+                raise ValueError("All geometries must be of Point type.")
+
+            df = df.copy()
+            df['longitude'] = df.geometry.x
+            df['latitude'] = df.geometry.y
+            return df, 'latitude', 'longitude'
+
+        elif lat_col is None or lon_col is None:
+            raise ValueError("lat_col and lon_col must be provided unless df is a GeoDataFrame with Point geometries.")
+        
+        return df, lat_col, lon_col
+    
+    def _separate_kwargs(self, df: Union[pd.DataFrame, gpd.GeoDataFrame], **kwargs):
+        """
+        Private method to separate scalar kwargs from those that are column-based.
+        """
+        scalar_kwargs = {}
+        column_kwargs = {}
+        for key, value in kwargs.items():
+            if isinstance(value, str) and value in df.columns:
+                column_kwargs[key] = value
+            else:
+                scalar_kwargs[key] = value
+
+        return scalar_kwargs, column_kwargs
+    
     def add_circle_markers_from_df(
         self,
         df: Union[pd.DataFrame, gpd.GeoDataFrame],
@@ -41,31 +78,10 @@ class Map:
         is_geodf = isinstance(df, gpd.GeoDataFrame)
 
         # If GeoDataFrame and lat_col/lon_col not provided, extract coordinates from geometry
-        if is_geodf and lat_col is None and lon_col is None:
-            # Ensure geometry column is present and of Point type
-            if df.geometry.is_empty.any():
-                raise ValueError("GeoDataFrame contains empty geometries.")
-            if not all(df.geometry.geom_type == 'Point'):
-                raise ValueError("All geometries must be of Point type.")
+        df, lat_col, lon_col = self._extract_coordinates(df, lat_col, lon_col)
 
-            # Extract latitude and longitude from geometry
-            df = df.copy()  # To avoid modifying the original DataFrame
-            df['longitude'] = df.geometry.x
-            df['latitude'] = df.geometry.y
-            lat_col = 'latitude'
-            lon_col = 'longitude'
-
-        elif lat_col is None or lon_col is None:
-            raise ValueError("lat_col and lon_col must be provided unless df is a GeoDataFrame with Point geometries.")
-
-        # Separate scalar kwargs from those that are column-based
-        scalar_kwargs = {}
-        column_kwargs = {}
-        for key, value in kwargs.items():
-            if isinstance(value, str) and value in df.columns:
-                column_kwargs[key] = value
-            else:
-                scalar_kwargs[key] = value
+         # Separate scalar kwargs from column-based kwargs
+        scalar_kwargs, column_kwargs = self._separate_kwargs(df, **kwargs)
 
         for _, row in df.iterrows():
             marker_kwargs = scalar_kwargs.copy()
@@ -114,25 +130,7 @@ class Map:
         if slice_obj is not None:
             df = df.loc[slice_obj]
 
-        # Determine if df is a GeoDataFrame
-        is_geodf = isinstance(df, gpd.GeoDataFrame)
- 
-        # If GeoDataFrame and lat_col/lon_col not provided, extract coordinates from geometry
-        if is_geodf and lat_col is None and lon_col is None:
-            if df.geometry.is_empty.any():
-                raise ValueError("GeoDataFrame contains empty geometries.")
-            if not all(df.geometry.geom_type == 'Point'):
-                raise ValueError("All geometries must be of Point type.")
-
-            # Extract latitude and longitude from geometry
-            df = df.copy()
-            df['longitude'] = df.geometry.x
-            df['latitude'] = df.geometry.y
-            lat_col = 'latitude'
-            lon_col = 'longitude'
-
-        elif lat_col is None or lon_col is None:
-            raise ValueError("lat_col and lon_col must be provided unless df is a GeoDataFrame with Point geometries.")
+        df, lat_col, lon_col = self._extract_coordinates(df, lat_col, lon_col)
 
         # Iterate over the DataFrame and add markers
         for _, row in df.iterrows():
