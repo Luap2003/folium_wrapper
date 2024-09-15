@@ -28,6 +28,10 @@ class Map:
         - lon_col (str, optional): Column name for longitude.
         - slice_obj (slice, optional): A slice object to slice the DataFrame.
         - **kwargs: Additional arguments for folium.CircleMarker (can be scalar or column names).
+        
+        Notes:
+        - If df is a GeoDataFrame with Point geometries, lat_col and lon_col can be omitted.
+        - Ensure df is in WGS84 (EPSG:4326) coordinate reference system.
         """
         # Apply slicing if slice_obj is provided
         if slice_obj is not None:
